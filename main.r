@@ -177,22 +177,25 @@ als <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 als_min <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 	m <- 2
 	n <- length(y)
-	matrix(1, nrow=n, ncol=2*m+2) -> t
+	matrix(1, nrow=n, ncol=2*m) -> t
 	matrix(0, nrow=m, ncol=m) -> P
 	rep(1,m) -> R
 
+	t[,2] <- x
+
 	theta <- function(sd2) {
-	for (i in 1:(2*m)) { t[,i+2] <- x * t[,i+1] - (i - 1) * sd2 * t[,i] }
-	for (i in 1:m) { R[i] <- sum(t[,i+1] * y) }
-	for (i in 1:m) { for (j in 1:m) { P[i,j] <- sum(t[,i+j]) } }
-	c(solve(P) %*% matrix(R))
+		for (i in 3:(2*m)) { t[,i] <- x * t[,i-1] - (i - 2) * sd2 * t[,i-2] }
+		for (i in 1:m) { R[i] <- sum(t[,i] * y) }
+		for (i in 1:m) { for (j in 1:m) { P[i,j] <- sum(t[,i+j-1]) } }
+		c(solve(P) %*% matrix(R))
 	}
 	F <- function(sd2) {
-	tet <- theta(sd2)
-	(sd2/(sum(y^2) - sum(R * tet)/n) - var(x) / var(y))^2
+		tet <- theta(sd2)
+		(n * sd2/(sum(y^2) - sum(R * tet)) - var(x) / var(y))^2
 	}
 
 	o = optimize(F, interval=c(-1, 100000))
+	print(o$minimum)
 	theta(o$minimum)
 }
 
@@ -202,9 +205,9 @@ als_min <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 
 n <- 100
 for (i in 1:n) {
-data <- generate(500, c(1.8, 0.4))
-t <- als_min(data$x, data$y)
-tet <- tet+t
+	data <- generate(500, c(1.8, 0.4))
+	t <- als_min(data$x, data$y)
+	tet <- tet+t
 }
 
 tet <- tet / n
