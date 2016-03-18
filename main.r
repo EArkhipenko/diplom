@@ -13,8 +13,14 @@ generate <- function(n, tet, sigma1=0.01,sigma2=0.01, sigma3=0.01, sigma4=0.5) {
 	list(x = ksi + delta, y = eta + eps)
 }
 
+mnk <- function (x, y) { 
+	n <- length(y)
+	x <- cbind(rep(1,n), x)
+	c(solve(t(x) %*% (x)) %*% t(x) %*% matrix(y)) 
+}
+
 # Au?eneyai aaooa
-rcr <- function(x, y, b0=0.001, h=0.001, eps=1.e-8, k=0) {
+rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, h=0.001, eps=1.e-8, k=0) {
 	r <- sqrt((x-mean(x))^2 + (y - mean(y))^2)
 	Sxx <- sum((x-mean(x))^2 / r^2)
 	Sxy <- sum((x-mean(x)) * (y - mean(y)) / r^2)
@@ -23,17 +29,32 @@ rcr <- function(x, y, b0=0.001, h=0.001, eps=1.e-8, k=0) {
 	mx <- mean(x)
 
 	theta <- function(gamma) {
-	gamma0 <- 1 - gamma
-	f <- function(b) (gamma0 + gamma / b^2) * (Syy + b^2 * Sxx - 2 * b * Sxy)
-	df <- function(b) (f(b + h) - f(b)) / h
-	res <- nleqslv(b0, df, method = "Newton")
-	b <- res$x
-	c(my - b * mx, b)
+		gamma0 <- 1 - gamma
+		f <- function(b) (gamma0 + gamma / b^2) * (Syy + b^2 * Sxx - 2 * b * Sxy)
+		df <- function(b) (f(b + h) - f(b)) / h
+		res <- nleqslv(b0, df, method = "Newton")
+		b <- res$x
+		c(my - b * mx, b)
 	}
 
-	for (g in (1:100) / 100) {
-	print(c(g, theta(g)))
-}
+	psi <- function (gamma) {
+		t <- theta(gamma)
+		sum((t - te)^2 /  te^2)
+	}
+
+
+	#plot(psi, 0, 1)
+
+	# g <- 
+	# p <- sapply(g, psi)
+	# a <- sapply(g, 
+
+	# x <- data.frame(g = g, psi = p)
+	# write.table(x, file = "rcr.csv", sep = ",", col.names = NA, qmethod = "double")
+
+	for (g in (0:100) / 100) {
+		print(c(g, psi(g), theta(g)))
+	}
 
 # F <- function(gamma) {
 # t <- theta(gamma)
@@ -153,30 +174,6 @@ rcr3 <- function(x, y, gamma_init=0.1, b0=0.001, h=0.001, eps=1.e-8) {
 als <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 	m <- 2
 	n <- length(y)
-	matrix(1, nrow=n, ncol=2*m+2) -> t
-	matrix(0, nrow=m, ncol=m) -> P
-	sd2 <- sigma_init^2
-	repeat {
-	for (i in 1:(2*m)) { t[,i+2] <- x * t[,i+1] - (i - 1) * sd2 * t[,i] }
-
-	R <- rep(1,m)
-	for (i in 1:m) { R[i] <- sum(t[,i+1] * y) }
-	for (i in 1:m) { for (j in 1:m) { P[i,j] <- sum(t[,i+j]) } }
-	tet <- c(solve(P) %*% matrix(R))
-	sd2_pr <- sd2
-	sd2 <- var(x) * (sum(y^2) - sum(R * tet)/n) / var(y)
-	print(c(sd2, sd2_pr))
-	if (abs(sd2_pr - sd2) / abs(sd2) <= eps) {
-		break
-	}
-	#print(sd2)
-	}
-	tet
-}
-
-als_min <- function(x, y, sigma_init=0.01, eps=1.e-8) {
-	m <- 2
-	n <- length(y)
 	matrix(1, nrow=n, ncol=2*m) -> t
 	matrix(0, nrow=m, ncol=m) -> P
 	rep(1,m) -> R
@@ -191,23 +188,25 @@ als_min <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 	}
 	F <- function(sd2) {
 		tet <- theta(sd2)
-		(n * sd2/(sum(y^2) - sum(R * tet)) - var(x) / var(y))^2
+		((n * sd2)/(sum(y^2 - R * tet)) - (var(x) / var(y)))^2
 	}
 
-	o = optimize(F, interval=c(-1, 100000))
+	o = optimize(F, interval=c(0, 10))
 	print(o$minimum)
+	plot(F, 0, 10)
 	theta(o$minimum)
 }
 
 
-#data <- generate(500, c(1.8, 0.37))
-#tet <- rcr(data$x, data$y)
+data <- generate(500, c(1.8, 0.37))
+tet <- rcr(data$x, data$y)
+tet <- mnk(data$x, data$y)
 
-n <- 100
-for (i in 1:n) {
-	data <- generate(500, c(1.8, 0.4))
-	t <- als_min(data$x, data$y)
-	tet <- tet+t
-}
+# n <- 100
+# for (i in 1:n) {
+# 	data <- generate(500, c(1.8, 0.4))
+# 	t <- als(data$x, data$y)
+# 	tet <- tet+t
+# }
 
-tet <- tet / n
+# tet <- tet / n
