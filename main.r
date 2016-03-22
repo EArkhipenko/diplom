@@ -21,20 +21,40 @@ mnk <- function (x, y) {
 
 # Au?eneyai aaooa
 rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, h=0.001, eps=1.e-8, k=0) {
-	r <- sqrt((x-mean(x))^2 + (y - mean(y))^2)
-	Sxx <- sum((x-mean(x))^2 / r^2)
-	Sxy <- sum((x-mean(x)) * (y - mean(y)) / r^2)
+	p <- length(te) - 1
+
+	r <- sqrt(apply(sapply(1:p, function(i) (x^i - mean(x^i))^2), 1, sum) + (y - mean(y))^2)
+	Sxx <- function (i, j) sum((x^i-mean(x^i)) * (x^j-mean(x^j)) / r^2)
+	Sxy <- function (j) sum((x^j-mean(x^j)) * (y - mean(y)) / r^2)
 	Syy <- sum((y-mean(y))^2 / r^2)
-	my <- mean(y)
-	mx <- mean(x)
 
 	theta <- function(gamma) {
-		gamma0 <- 1 - gamma
-		f <- function(b) (gamma0 + gamma / b^2) * (Syy + b^2 * Sxx - 2 * b * Sxy)
-		df <- function(b) (f(b + h) - f(b)) / h
-		res <- nleqslv(b0, df, method = "Newton")
+		gamma0 <- 1 - sum(gamma)
+		f <- function(b) {
+			Sxx.sum <- 0
+			Sxy.sum <- 0
+			for (i in 1:p) {
+				for (j in 1:p) {
+					Sxx.sum <- Sxx.sum + b[i] * b[j] * Sxx(i, j)
+				}
+				Sxy.sum <- Sxy.sum + b[i] * Sxy(i)
+			}
+			#sum(sapply(1:5, function (j) sum(sapply(1:5, Sxx, j=j))))
+			(gamma0 + sum(gamma / b^2)) * (Syy + Sxx.sum - 2 * Sxy.sum)
+		}
+		df <- function(b) {
+			grad <- numeric(p)
+			for (i in 1:p) {
+				b.plus.h <- b
+				b.plus.h[i] <- b.plus.h[i] + h 
+				grad[i] <- (f(b.plus.h) - f(b)) / h
+			}
+			grad
+		}
+		res <- nleqslv(rep(b0, p), df, method = "Newton")
 		b <- res$x
-		c(my - b * mx, b)
+		alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(x^i))))
+		c(alpha, b)
 	}
 
 	psi <- function (gamma) {
@@ -52,9 +72,16 @@ rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, h=0.001, eps=1.e-8, k=0) {
 	# x <- data.frame(g = g, psi = p)
 	# write.table(x, file = "rcr.csv", sep = ",", col.names = NA, qmethod = "double")
 
-	for (g in (0:100) / 100) {
-		print(c(g, psi(g), theta(g)))
+	for (g1 in (0:10) / 50) {
+		for (g2 in (0:10) / 50) {
+			g <- c(g1, g2)
+			print(c(g, psi(g), theta(g)))
+		}
 	}
+
+	# for (g in (0:100) / 100) {
+	# 	print(c(g, psi(g), theta(g)))
+	# }
 
 # F <- function(gamma) {
 # t <- theta(gamma)
@@ -197,10 +224,11 @@ als <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 	theta(o$minimum)
 }
 
+te <- c(1.8, 0.4, 0.6)
 
-data <- generate(500, c(1.8, 0.37))
-tet <- rcr(data$x, data$y)
-tet <- mnk(data$x, data$y)
+data <- generate(500, te)
+tet <- rcr(data$x, data$y, te=te)
+#tet <- mnk(data$x, data$y)
 
 # n <- 100
 # for (i in 1:n) {
