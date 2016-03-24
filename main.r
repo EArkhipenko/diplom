@@ -13,9 +13,10 @@ generate <- function(n, tet, sigma1=0.01,sigma2=0.01, sigma3=0.01, sigma4=0.5) {
 	list(x = ksi + delta, y = eta + eps)
 }
 
-mnk <- function (x, y) { 
+mnk <- function (x, y, te = c(1.8, 0.4)) {
+	p <- length(te) - 1
 	n <- length(y)
-	x <- cbind(rep(1,n), x)
+	x <- cbind(rep(1,n), sapply(1:p, function(i) x^i))
 	c(solve(t(x) %*% (x)) %*% t(x) %*% matrix(y)) 
 }
 
@@ -227,7 +228,7 @@ als <- function(x, y, sigma_init=0.01, eps=1.e-8) {
 te <- c(1.8, 0.4, 0.6)
 
 data <- generate(500, te)
-tet <- rcr(data$x, data$y, te=te)
+tet <- mnk(data$x, data$y, te=te)
 #tet <- mnk(data$x, data$y)
 
 # n <- 100
