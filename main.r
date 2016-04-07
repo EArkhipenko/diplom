@@ -33,6 +33,8 @@ rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, g0=0.001, h=0.0001, eps=1.e-8,
 
 	SS <- function(b, gamma) {
 		gamma0 <- 1 - sum(gamma)
+		#gamma0 <- gamma[1]
+		#gamma.other <- gamma[2:length(gamma)]
 		Sxx.sum <- 0
 		Sxy.sum <- 0
 		for (i in 1:p) {
@@ -44,24 +46,38 @@ rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, g0=0.001, h=0.0001, eps=1.e-8,
 		#sum(sapply(1:5, function (j) sum(sapply(1:5, Sxx, j=j))))
 		(gamma0 + sum(gamma / b^2)) * (Syy + Sxx.sum - 2 * Sxy.sum)
 	}
-	f <- function(v) SS(v[1:p], v[(p+1):(2*p)])
-	df <- function(v) {
-		l <- length(v)
-		grad <- numeric(l)
-		for (i in 1:l) {
-			v.plus.h <- v
-			v.plus.h[i] <- v.plus.h[i] + h 
-			grad[i] <- (f(v.plus.h) - f(v)) / h
+#	f <- function(v) SS(v[1:p], v[(p+1):(2*p)])
+	fg <- function(b) function(g) SS(b, g)
+	fb <- function(g) function(b) SS(b, g)
+	df <- function(f) {
+		function (v) {
+			l <- length(v)
+			grad <- numeric(l)
+			for (i in 1:l) {
+				v.plus.h <- v
+				v.plus.h[i] <- v.plus.h[i] + h 
+				grad[i] <- (f(v.plus.h) - f(v)) / h
+			}
+			grad
 		}
-		grad
 	}
-	v0 <- c(rep(b0, p), rep(g0, p))
-	res <- nleqslv(v0, df, method = "Newton",control=list(trace=1))
-	v <- res$x
-	b <- v[1:p]
-	g <- v[(p+1):(2*p)]
-	print(v)
-	print(df(v))
+	norm <- function(x) sqrt(sum(x^2))
+	b <- b0
+	g <- rep(g0, p)
+	repeat {
+		#res <- nleqslv(rep(g0, p), df(fg(b)), method = "Newton")
+		res <- BBsolve(par=g, fn=df(fg(b)))
+		g <- res$x
+		print(g)
+		# res <- nleqslv(b, df(fb(g)), method = "Newton")
+		res <- BBsolve(par=b, fn=df(fb(g)))
+		b_new <- res$x
+		if (norm(b_new - b) / norm(b) <= eps) {
+			break
+		}
+		b <- b_new
+	}
+
 	alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(x^i))))
 	c(alpha, b)
 
@@ -239,10 +255,11 @@ als <- function(x, y, te, sigma_init=0.01, eps=1.e-8) {
 	theta(0.0001)
 }
 
-te <- c(1.8, 0.4)
+te <- c(1.8, 0.4, 0.8)
 
 data <- generate(500, te)
-tet <- als(data$x, data$y, te=te)
+b0 <- mnk(data$x, data$y, te=te)
+tet <- rcr(data$x, data$y, te=te, b0=b0[2:length(b0)])
 #tet <- mnk(data$x, data$y)
 
 # n <- 100
