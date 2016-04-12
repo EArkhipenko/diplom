@@ -2,16 +2,20 @@ require(nleqslv)
 require(BB)
 
 # Aaia?e?oai aoiaiua aaiiua
-generate <- function(n, tet, sigma1=0.01,sigma2=0.01, sigma3=0.01, sigma4=0.5) {
+generate <- function(n, tet, sigma1=0.01,sigma2=0.5, sigma3=0.01, sigma4=0.5) {
+	m <- length(tet)
 	c(runif(n, -1, 1)) -> ksi
-	eta <- tet[1] + ksi * tet[2]
+	#eta <- tet[1] + ksi * tet[2] + ksi^2 * tet[3]
+	eta <- apply(sapply(1:m, function(i) ksi^(i-1)), 1, function(r) sum(r * tet))
 	#rnorm(n, 0, sigma) -> delta
 
-	rbinom(n, 1, 1) -> rb1
-	rbinom(n, 1, 1) -> rb2
+	rbinom(n, 1, 0.05) -> rb1
+	rbinom(n, 1, 0.05) -> rb2
+
 	sapply(rb1, function(x) rnorm(1, 0, switch(x + 1, sigma1, sigma2))) -> delta
 	sapply(rb2, function(x) rnorm(1, 0, switch(x + 1, sigma3, sigma4))) -> eps
 	list(x = ksi + delta, y = eta + eps)
+	#list(x = ksi, y = eta)
 }
 
 mnk <- function (x, y, te = c(1.8, 0.4)) {
@@ -22,7 +26,7 @@ mnk <- function (x, y, te = c(1.8, 0.4)) {
 }
 
 # Au?eneyai aaooa
-rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, g0=0.001, h=0.0001, eps=1.e-8, k=0) {
+rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, g0=0.001, h=0.001, eps=1.e-8, k=0) {
 	p <- length(te) - 1
 
 	r <- sqrt(apply(sapply(1:p, function(i) (x^i - mean(x^i))^2), 1, sum) + (y - mean(y))^2)
@@ -65,12 +69,13 @@ rcr <- function(x, y, te = c(1.8, 0.4), b0=0.001, g0=0.001, h=0.0001, eps=1.e-8,
 	b <- b0
 	g <- rep(g0, p)
 	repeat {
-		#res <- nleqslv(rep(g0, p), df(fg(b)), method = "Newton")
-		res <- BBsolve(par=g, fn=df(fg(b)))
+		# f <- df(fg(b))
+		# plot (f, 0, 1)
+
+		res <- nleqslv(g, df(fg(b)), method = "Newton")
 		g <- res$x
-		print(g)
-		# res <- nleqslv(b, df(fb(g)), method = "Newton")
-		res <- BBsolve(par=b, fn=df(fb(g)))
+		print (g)
+		res <- nleqslv(b, df(fb(g)), method = "Newton")
 		b_new <- res$x
 		if (norm(b_new - b) / norm(b) <= eps) {
 			break
@@ -255,9 +260,10 @@ als <- function(x, y, te, sigma_init=0.01, eps=1.e-8) {
 	theta(0.0001)
 }
 
-te <- c(1.8, 0.4, 0.8)
+te <- c(1.8, 0.4)
 
 data <- generate(500, te)
+#plot(data$x, data$y)
 b0 <- mnk(data$x, data$y, te=te)
 tet <- rcr(data$x, data$y, te=te, b0=b0[2:length(b0)])
 #tet <- mnk(data$x, data$y)
