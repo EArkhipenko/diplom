@@ -37,9 +37,9 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
 
 
   SS <- function(b, gamma) {
-    gamma0 <- 1 - sum(gamma)
-    #gamma0 <- gamma[1]
-    #gamma.other <- gamma[2:length(gamma)]
+    #gamma0 <- 1 - sum(gamma)
+    gamma0 <- gamma[1]
+    gamma.other <- gamma[2:length(gamma)]
     Sxx.sum <- 0
     Sxy.sum <- 0
     for (i in 1:p) {
@@ -49,7 +49,7 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
       Sxy.sum <- Sxy.sum + b[i] * Sxy(i)
     }
     #sum(sapply(1:5, function (j) sum(sapply(1:5, Sxx, j=j))))
-    (gamma0 + sum(gamma / b^2)) * (Syy + Sxx.sum - 2 * Sxy.sum)
+    (gamma0 + sum(gamma.other / b^2)) * (Syy + Sxx.sum - 2 * Sxy.sum)
   }
 # f <- function(v) SS(v[1:p], v[(p+1):(2*p)])
   fg <- function(b) function(g) SS(b, g)
@@ -67,8 +67,18 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
     }
   }
   norm <- function(x) sqrt(sum(x^2))
+  basis <- function(n, i, val) {
+  	a <- numeric(n)
+  	a[i] <- val
+  	a
+  }
   b <- b0
   g <- rep(g0, p)
+  F <- function(g) {
+	res <- nleqslv(b0, df(fb(g)), method = "Newton")
+    b <- res$x
+    sum(sapply(1:(p+1), function(i) SS(b, basis(p, i, 1)) / SS(b, basis(p, i, g[i]))))
+  }
   repeat {
     f <- fg(b)
     plot (sapply((0:100) / 100, f), (0:100) / 100)
