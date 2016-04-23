@@ -73,26 +73,34 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   	a
   }
   b <- b0
-  g <- rep(g0, p)
+  g.init <- c(1-g0*p, rep(g0, p))
   F <- function(g) {
 	res <- nleqslv(b0, df(fb(g)), method = "Newton")
     b <- res$x
-    sum(sapply(1:(p+1), function(i) SS(b, basis(p, i, 1)) / SS(b, basis(p, i, g[i]))))
-  }
-  repeat {
-    f <- fg(b)
-    plot (sapply((0:100) / 100, f), (0:100) / 100)
+    -sum(sapply(1:(p+1), function(i) SS(b, basis(p+1, i, 1)) / SS(b, basis(p+1, i, g[i]))))
 
-    res <- nleqslv(g, df(fg(b)), method = "Newton")
-    g <- res$x
-    print (g)
-    res <- nleqslv(b, df(fb(g)), method = "Newton")
-    b_new <- res$x
-    if (norm(b_new - b) / norm(b) <= eps) {
-      break
-    }
-    b <- b_new
   }
+  res <- optim(par=g.init, F)
+  g <- res$par
+  print(g)
+  res <- nleqslv(b0, df(fb(g)), method = "Newton")
+  b <- res$x
+
+
+  # repeat {
+  #   f <- fg(b)
+  #   plot (sapply((0:100) / 100, f), (0:100) / 100)
+
+  #   res <- nleqslv(g, df(fg(b)), method = "Newton")
+  #   g <- res$x
+  #   print (g)
+  #   res <- nleqslv(b, df(fb(g)), method = "Newton")
+  #   b_new <- res$x
+  #   if (norm(b_new - b) / norm(b) <= eps) {
+  #     break
+  #   }
+  #   b <- b_new
+  # }
 
   alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(x^i))))
   c(alpha, b)
