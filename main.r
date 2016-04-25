@@ -2,7 +2,7 @@ require(nleqslv)
 require(xlsx)
 
 # Aaia?e?oai aoiaiua aaiiua
-generate <- function(n, tet, sigma1=0.01,sigma2=0.5, sigma3=0.01, sigma4=0.5) {
+generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
   m <- length(tet)
   c(runif(n, -1, 1)) -> ksi
   #eta <- tet[1] + ksi * tet[2] + ksi^2 * tet[3]
@@ -72,17 +72,22 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   	a[i] <- val
   	a
   }
-  b <- b0
-  g.init <- c(1-g0*p, rep(g0, p))
-  F <- function(g) {
-	res <- nleqslv(b0, df(fb(g)), method = "Newton")
-    b <- res$x
-    -sum(sapply(1:(p+1), function(i) SS(b, basis(p+1, i, 1)) / SS(b, basis(p+1, i, g[i]))))
 
+  g.init <- c(1-g0*p, rep(g0, p))
+  b.init <- b0
+  cacl_b <- function (g, b.init) {
+  	res <- nleqslv(b.init, df(fb(g)), method = "Newton")
+  	res$x
+  }
+  
+  F <- function(g) {
+    b <- cacl_b(g, b.init)
+    b.init <- b
+    -sum(sapply(1:(p+1), function(i) SS(cacl_b(basis(p+1, i, 1), b.init), basis(p+1, i, 1)) / SS(b, basis(p+1, i, 1))))
   }
   res <- optim(par=g.init, F)
   g <- res$par
-  print(g)
+  print(c(g, sum(g)))
   res <- nleqslv(b0, df(fb(g)), method = "Newton")
   b <- res$x
 
@@ -317,7 +322,7 @@ report <- function (N, te) {
   write.xlsx(x, file = "report.xlsx")
 }
 
-te <- c(1.8, 0.4)
+te <- c(1.8, 0.4, 2.1)
 
 #report(10, te)
 
