@@ -1,5 +1,6 @@
 require(nleqslv)
 require(xlsx)
+library(rgl)
 
 # Aaia?e?oai aoiaiua aaiiua
 generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
@@ -73,20 +74,34 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   	a
   }
 
-  g.init <- c(1-g0*p, rep(g0, p))
+  g.init <- rep(g0, p)
   b.init <- b0
   cacl_b <- function (g, b.init) {
   	res <- nleqslv(b.init, df(fb(g)), method = "Newton")
   	res$x
   }
   
-  F <- function(g) {
+  F <- function(g.p) {
+  	g <- c((1-sum(g.p)), g.p)
     b <- cacl_b(g, b.init)
     b.init <- b
     -sum(sapply(1:(p+1), function(i) SS(cacl_b(basis(p+1, i, 1), b.init), basis(p+1, i, 1)) / SS(b, basis(p+1, i, 1))))
   }
-  res <- optim(par=g.init, F)
-  g <- res$par
+
+  plot ((1:100) / 100, sapply((1:100) / 100, F))
+ #  x <- (1:100) / 100
+ #  xn = length(x)
+ #  z <- matrix(0, nrow = xn, ncol = xn)
+ #  for (i in 1:xn){
+ #  for (j in 1:xn){
+ #    z[i,j] <- f(x[i], x[j])
+ #  	}
+	# }
+ #  persp3d(z)
+  #res <- optim(par=g.init, F)
+  res <- optimize(F, interval=c(0,1))
+  #g <- res$par
+  g <- c((1-res$minimum), res$minimum)
   print(c(g, sum(g)))
   res <- nleqslv(b0, df(fb(g)), method = "Newton")
   b <- res$x
@@ -215,7 +230,7 @@ theta()
 
 }
 
-# Âû÷èñëÿåì áåòòà
+# Ã‚Ã»Ã·Ã¨Ã±Ã«Ã¿Ã¥Ã¬ Ã¡Ã¥Ã²Ã²Ã 
 rcr3 <- function(x, y, gamma_init=0.1, b0=0.001, h=0.001, eps=1.e-8) {
 
   r <- sqrt((x-mean(x))^2 + (y - mean(y))^2)
@@ -322,7 +337,7 @@ report <- function (N, te) {
   write.xlsx(x, file = "report.xlsx")
 }
 
-te <- c(1.8, 0.4, 2.1)
+te <- c(1.3, 2.1)
 
 #report(10, te)
 
