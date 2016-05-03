@@ -111,6 +111,7 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   print(c(g, sum(g)))
   #print(c(-F(res$minimum), theta(g)))
   #print(-F(res$par))
+  theta(g)
   
 
 
@@ -130,22 +131,22 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   # }
 
 
-  psi <- function (gamma) {
-    t <- theta(gamma)
-    sum((t - te)^2 /  te^2)
-  }
+  # psi <- function (gamma) {
+  #   t <- theta(gamma)
+  #   sum((t - te)^2 /  te^2)
+  # }
 
 
   # for (g in (1:100) / 100) {
   #   print(c(g, psi(c(1-g,g)), -F(g), theta(c(1-g,g))))
   # }
 
-	for (g1 in (0:100) / 100) {
-		for (g2 in (0:10) / 10) {
-			g <- c(1-g1-g2, g1, g2)
-			print(c(g, psi(g), -F(c( g1, g2)), theta(g)))
-		}
-	}
+	# for (g1 in (0:100) / 100) {
+	# 	for (g2 in (0:10) / 10) {
+	# 		g <- c(1-g1-g2, g1, g2)
+	# 		print(c(g, psi(g), -F(c( g1, g2)), theta(g)))
+	# 	}
+	# }
   
 
 
@@ -309,26 +310,28 @@ als <- function(x, y, te, tet.init, sigma_init=0.01, eps=1.e-8) {
 
   norm <- function(x) sqrt(sum(x^2))
 
+  theta(0.01)
+
   #g <- var(x) / var(y)
-  g <- 1
+  # g <- 1
 
-  print (c(var(x) / var(y), 1))
-  repeat {
+  # print (c(var(x) / var(y), 1))
+  # repeat {
     
-    y.est <- apply(sapply(1:m, function(i) x^(i-1)), 1, function(r) sum(r * tet))
+  #   y.est <- apply(sapply(1:m, function(i) x^(i-1)), 1, function(r) sum(r * tet))
 
-    # print (c(y- y.est))
-    # break
-    sd2 <- g * sum((y - y.est)^2) / (n - m)
-    tet_new <- theta(sd2)
-    nev <- norm(tet_new - tet) / norm(tet)
-    print(c(nev, sd2))
-    if (nev < eps) {
-      break
-    }
-    tet <- tet_new
-  }
-  tet
+  #   # print (c(y- y.est))
+  #   # break
+  #   sd2 <- g * sum((y - y.est)^2) / (n - m)
+  #   tet_new <- theta(sd2)
+  #   nev <- norm(tet_new - tet) / norm(tet)
+  #   print(c(nev, sd2))
+  #   if (nev < eps) {
+  #     break
+  #   }
+  #   tet <- tet_new
+  # }
+  # tet
 
   # o = optimize(F, interval=c(0, 10))
   # #o = BBoptim(par=0, fn=F)
@@ -343,11 +346,12 @@ report <- function (N, te) {
   psi <- function (tet) sum((tet - te)^2 /  te^2)
   err <- function (data, tet) {
   	m <- length(tet)
+  	n <- length(data$y)
   	y.est <- apply(sapply(1:m, function(i) data$x^(i-1)), 1, function(r) sum(r * tet))
-  	sum((data$y - y.est)^2) / n
+  	c(sum((data$y - y.est)^2) / n, sum(abs(data$y - y.est)) / n)
   }
   m <- length(te)
-  out <- matrix(0, nrow=N, ncol=(m+1)*2)
+  out <- matrix(0, nrow=N, ncol=(m+2)*3)
   for (i in 1:N) {
     data <- generate(500, te)
     tet.mnk <- mnk(data$x, data$y, te=te)
@@ -361,12 +365,12 @@ report <- function (N, te) {
 
 te <- c(1.3, 2.1, 0.4)
 
-#report(10, te)
+report(1, te)
 
 data <- generate(500, te)
 # #plot(data$x, data$y)
-b0 <- mnk(data$x, data$y, te=te)
-tet <- rcr(data$x, data$y, te=te, tet.init=b0)
+#b0 <- mnk(data$x, data$y, te=te)
+#tet <- rcr(data$x, data$y, te=te, tet.init=b0)
 
 
 
