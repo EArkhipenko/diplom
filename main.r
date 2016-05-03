@@ -76,19 +76,25 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
 
   g.init <- rep(g0, p)
   b.init <- b0
-  cacl_b <- function (g, b.init) {
+  calc_b <- function (g, b.init=b0) {
   	res <- nleqslv(b.init, df(fb(g)), method = "Newton")
   	res$x
   }
   
   F <- function(g.p) {
   	g <- c((1-sum(g.p)), g.p)
-    b <- cacl_b(g, b.init)
+    b <- calc_b(g, b.init)
     b.init <- b
-    -sum(sapply(1:(p+1), function(i) SS(cacl_b(basis(p+1, i, 1), b.init), basis(p+1, i, 1)) / SS(b, basis(p+1, i, 1))))
+    -sum(sapply(1:(p+1), function(i) SS(calc_b(basis(p+1, i, 1), b.init), basis(p+1, i, 1)) / SS(b, basis(p+1, i, 1))))
   }
 
-  plot ((1:100) / 100, sapply((1:100) / 100, F))
+  theta <- function(gamma) {
+  	b <- calc_b(gamma)
+  	alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(x^i))))
+    c(alpha, b)
+  }
+
+ # plot ((1:100) / 100, sapply((1:100) / 100, F))
  #  x <- (1:100) / 100
  #  xn = length(x)
  #  z <- matrix(0, nrow = xn, ncol = xn)
@@ -98,13 +104,14 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
  #  	}
 	# }
  #  persp3d(z)
-  #res <- optim(par=g.init, F)
-  res <- optimize(F, interval=c(0,1))
-  #g <- res$par
-  g <- c((1-res$minimum), res$minimum)
+  res <- optim(par=g.init, F)
+  #res <- optimize(F, interval=c(0,1))
+  g <- c((1-sum(res$par)), res$par)
+  #g <- c((1-res$minimum), res$minimum)
   print(c(g, sum(g)))
-  res <- nleqslv(b0, df(fb(g)), method = "Newton")
-  b <- res$x
+  #print(c(-F(res$minimum), theta(g)))
+  #print(-F(res$par))
+  
 
 
   # repeat {
@@ -122,14 +129,25 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   #   b <- b_new
   # }
 
-  alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(x^i))))
-  c(alpha, b)
+
+  psi <- function (gamma) {
+    t <- theta(gamma)
+    sum((t - te)^2 /  te^2)
+  }
 
 
-  # psi <- function (gamma) {
-  #   t <- theta(gamma)
-  #   sum((t - te)^2 /  te^2)
+  # for (g in (1:100) / 100) {
+  #   print(c(g, psi(c(1-g,g)), -F(g), theta(c(1-g,g))))
   # }
+
+	for (g1 in (0:100) / 100) {
+		for (g2 in (0:10) / 10) {
+			g <- c(1-g1-g2, g1, g2)
+			print(c(g, psi(g), -F(c( g1, g2)), theta(g)))
+		}
+	}
+  
+
 
 
   #plot(psi, 0, 1)
@@ -148,9 +166,7 @@ rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   #   }
   # }
 
-  # for (g in (0:100) / 100) {
-  #   print(c(g, psi(g), theta(g)))
-  # }
+
 
 # F <- function(gamma) {
 # t <- theta(gamma)
@@ -325,19 +341,25 @@ als <- function(x, y, te, tet.init, sigma_init=0.01, eps=1.e-8) {
 
 report <- function (N, te) {
   psi <- function (tet) sum((tet - te)^2 /  te^2)
+  err <- function (data, tet) {
+  	m <- length(tet)
+  	y.est <- apply(sapply(1:m, function(i) data$x^(i-1)), 1, function(r) sum(r * tet))
+  	sum((data$y - y.est)^2) / n
+  }
   m <- length(te)
   out <- matrix(0, nrow=N, ncol=(m+1)*2)
   for (i in 1:N) {
     data <- generate(500, te)
     tet.mnk <- mnk(data$x, data$y, te=te)
     tet.als <- als(data$x, data$y, te=te, tet.init=tet.mnk)
-    out[i,] <- c(tet.mnk, psi(tet.mnk), tet.als, psi(tet.als))
+    tet.rcr <- rcr(data$x, data$y, te=te, tet.init=tet.mnk)
+    out[i,] <- c(tet.mnk, err(data, tet.mnk), tet.als, err(data, tet.als), tet.rcr, err(data, tet.rcr))
   }
   x <- data.frame(out)
   write.xlsx(x, file = "report.xlsx")
 }
 
-te <- c(1.3, 2.1)
+te <- c(1.3, 2.1, 0.4)
 
 #report(10, te)
 
