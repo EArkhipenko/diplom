@@ -1,40 +1,38 @@
 require(nleqslv)
 require(xlsx)
 library(rgl)
+require(profr)
+require(ggplot2)
 
 # Aaia?e?oai aoiaiua aaiiua
 generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
   m <- length(tet)
   c(runif(n, -1, 1)) -> ksi
-  #eta <- tet[1] + ksi * tet[2] + ksi^2 * tet[3]
   eta <- apply(sapply(1:m, function(i) ksi^(i-1)), 1, function(r) sum(r * tet))
-  #rnorm(n, 0, sigma) -> delta
 
   rbinom(n, 1, 0.05) -> rb1
   rbinom(n, 1, 0.05) -> rb2
 
   sapply(rb1, function(x) rnorm(1, 0, switch(x + 1, sigma1, sigma2))) -> delta
   sapply(rb2, function(x) rnorm(1, 0, switch(x + 1, sigma3, sigma4))) -> eps
-  list(x = ksi + delta, y = eta + eps)
-  #list(x = ksi, y = eta)
+  X <- apply(sapply(1:m, function(i) ksi^(i-1)), 2, function(r) r + delta)
+  list(X = matrix(X, nrow = n, ncol = m), y = eta + eps)
 }
 
-mnk <- function (x, y, te = c(1.8, 0.4)) {
-  p <- length(te) - 1
-  n <- length(y)
-  x <- cbind(rep(1,n), sapply(1:p, function(i) x^i))
-  c(solve(t(x) %*% (x)) %*% t(x) %*% matrix(y)) 
+mnk <- function (X, y, te) {
+  c(solve(t(X) %*% (X)) %*% t(X) %*% matrix(y)) 
 }
 
 # Au?eneyai aaooa
-rcr <- function(x, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
+rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   b0 <- tet.init[2:length(tet.init)]
   p <- length(te) - 1
 
-  r <- sqrt(apply(sapply(1:p, function(i) (x^i - mean(x^i))^2), 1, sum) + (y - mean(y))^2)
-  Sxx <- function (i, j) sum((x^i-mean(x^i)) * (x^j-mean(x^j)) / r^2)
-  Sxy <- function (j) sum((x^j-mean(x^j)) * (y - mean(y)) / r^2)
+  r <- sqrt(apply(sapply(1:p, function(i) (X[,i+1] - mean(X[,i+1]))^2), 1, sum) + (y - mean(y))^2)
+  Sxx <- function (i, j) sum((X[,i+1]-mean(X[,i+1])) * (X[,j+1]-mean(X[,j+1])) / r^2)
+  Sxy <- function (j) sum((X[,j+1]-mean(X[,j+1])) * (y - mean(y)) / r^2)
   Syy <- sum((y-mean(y))^2 / r^2)
+  
 
 
   SS <- function(b, gamma) {
@@ -210,18 +208,18 @@ rcr2 <- function(x, y, b0=0.001, h=0.001, eps=1.e-8, k=0) {
   mx <- mean(x)
 
   theta <- function() {
-  f <- function(b) ((1 - (Syy - b * Sxy) / (Syy - b * Sxy + b^4 * Sxx - b^3 * Sxy)) + ((Syy - b * Sxy) / (Syy - b * Sxy + b^4 * Sxx - b^3 * Sxy)) / b^2) * (Syy + b^2 * Sxx - 2 * b * Sxy)
-  df <- function(b) (f(b + h) - f(b)) / h
-  res <- nleqslv(b0, df, method = "Newton")
-  b <- res$x
-  c(my - b * mx, b)
-}
+    f <- function(b) ((1 - (Syy - b * Sxy) / (Syy - b * Sxy + b^4 * Sxx - b^3 * Sxy)) + ((Syy - b * Sxy) / (Syy - b * Sxy + b^4 * Sxx - b^3 * Sxy)) / b^2) * (Syy + b^2 * Sxx - 2 * b * Sxy)
+    df <- function(b) (f(b + h) - f(b)) / h
+    res <- nleqslv(b0, df, method = "Newton")
+    b <- res$x
+    c(my - b * mx, b)
+  }
 
 # for (g in (1:100) / 100) {
 # print(c(g, theta(g)))
 # }
 
-theta()
+  theta()
 # repeat {
 
 # gamma_new <- (Syy - b * Sxy) / (Syy - b * Sxy + b^4 * Sxx - b^3 * Sxy)
@@ -243,11 +241,8 @@ theta()
 # #k = k+1
 
 # }
-
-
 }
 
-# Âû÷èñëÿåì áåòòà
 rcr3 <- function(x, y, gamma_init=0.1, b0=0.001, h=0.001, eps=1.e-8) {
 
   r <- sqrt((x-mean(x))^2 + (y - mean(y))^2)
@@ -282,17 +277,17 @@ rcr3 <- function(x, y, gamma_init=0.1, b0=0.001, h=0.001, eps=1.e-8) {
   c(mean(y) - b * mean(x), b)
 }
 
-als <- function(x, y, te, tet.init, sigma_init=0.01, eps=1.e-8) {
+als <- function(X, y, te, tet.init, sigma_init=0.01, eps=1.e-8) {
   m <- length(te)
   n <- length(y)
   matrix(1, nrow=n, ncol=2*m) -> t
   matrix(0, nrow=m, ncol=m) -> P
   rep(1,m) -> R
 
-  t[,2] <- x
+  t[,2] <- X[,2]
 
   theta <- function(sd2) {
-    for (i in 3:(2*m)) { t[,i] <- x * t[,i-1] - (i - 2) * sd2 * t[,i-2] }
+    for (i in 3:(2*m)) { t[,i] <- X[,2] * t[,i-1] - (i - 2) * sd2 * t[,i-2] }
     for (i in 1:m) { R[i] <- sum(t[,i] * y) }
     for (i in 1:m) { for (j in 1:m) { P[i,j] <- sum(t[,i+j-1]) } }
     c(solve(P) %*% matrix(R))
@@ -347,16 +342,16 @@ report <- function (N, te) {
   err <- function (data, tet) {
   	m <- length(tet)
   	n <- length(data$y)
-  	y.est <- apply(sapply(1:m, function(i) data$x^(i-1)), 1, function(r) sum(r * tet))
+  	y.est <- apply(sapply(1:m, function(i) data$X[,i]), 1, function(r) sum(r * tet))
   	c(sum((data$y - y.est)^2) / n, sum(abs(data$y - y.est)) / n)
   }
   m <- length(te)
   out <- matrix(0, nrow=N, ncol=(m+2)*3)
   for (i in 1:N) {
     data <- generate(500, te)
-    tet.mnk <- mnk(data$x, data$y, te=te)
-    tet.als <- als(data$x, data$y, te=te, tet.init=tet.mnk)
-    tet.rcr <- rcr(data$x, data$y, te=te, tet.init=tet.mnk)
+    tet.mnk <- mnk(data$X, data$y, te=te)
+    tet.als <- als(data$X, data$y, te=te, tet.init=tet.mnk)
+    tet.rcr <- rcr(data$X, data$y, te=te, tet.init=tet.mnk)
     out[i,] <- c(tet.mnk, err(data, tet.mnk), tet.als, err(data, tet.als), tet.rcr, err(data, tet.rcr))
   }
   x <- data.frame(out)
@@ -364,10 +359,9 @@ report <- function (N, te) {
 }
 
 te <- c(1.3, 2.1, 0.4)
-
-report(1, te)
-
-data <- generate(500, te)
+p = profr(report(1, te))
+ggplot(p)
+#data <- generate(500, te)
 # #plot(data$x, data$y)
 #b0 <- mnk(data$x, data$y, te=te)
 #tet <- rcr(data$x, data$y, te=te, tet.init=b0)
