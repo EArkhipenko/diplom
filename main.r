@@ -1,8 +1,6 @@
 require(nleqslv)
 require(xlsx)
 library(rgl)
-require(profr)
-require(ggplot2)
 
 # Aaia?e?oai aoiaiua aaiiua
 generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
@@ -29,10 +27,18 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   p <- length(te) - 1
 
   r <- sqrt(apply(sapply(1:p, function(i) (X[,i+1] - mean(X[,i+1]))^2), 1, sum) + (y - mean(y))^2)
-  Sxx <- function (i, j) sum((X[,i+1]-mean(X[,i+1])) * (X[,j+1]-mean(X[,j+1])) / r^2)
-  Sxy <- function (j) sum((X[,j+1]-mean(X[,j+1])) * (y - mean(y)) / r^2)
+  fSxx <- function (i, j) sum((X[,i+1]-mean(X[,i+1])) * (X[,j+1]-mean(X[,j+1])) / r^2)
+  fSxy <- function (j) sum((X[,j+1]-mean(X[,j+1])) * (y - mean(y)) / r^2)
   Syy <- sum((y-mean(y))^2 / r^2)
   
+  Sxx <- matrix(0, nrow = p, ncol = p)
+  Sxy <- numeric(p)
+  for (i in 1:p) {
+    for (j in 1:p) {
+      Sxx[i,j] <- fSxx(i, j)
+    }
+    Sxy[i] <- fSxy(i)
+  }
 
 
   SS <- function(b, gamma) {
@@ -43,9 +49,9 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
     Sxy.sum <- 0
     for (i in 1:p) {
       for (j in 1:p) {
-        Sxx.sum <- Sxx.sum + b[i] * b[j] * Sxx(i, j)
+        Sxx.sum <- Sxx.sum + b[i] * b[j] * Sxx[i, j]
       }
-      Sxy.sum <- Sxy.sum + b[i] * Sxy(i)
+      Sxy.sum <- Sxy.sum + b[i] * Sxy[i]
     }
     #sum(sapply(1:5, function (j) sum(sapply(1:5, Sxx, j=j))))
     (gamma0 + sum(gamma.other / b^2)) * (Syy + Sxx.sum - 2 * Sxy.sum)
@@ -359,8 +365,7 @@ report <- function (N, te) {
 }
 
 te <- c(1.3, 2.1, 0.4)
-p = profr(report(1, te))
-ggplot(p)
+report(1, te)
 #data <- generate(500, te)
 # #plot(data$x, data$y)
 #b0 <- mnk(data$x, data$y, te=te)
