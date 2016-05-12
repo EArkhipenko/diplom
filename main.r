@@ -15,7 +15,7 @@ generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
 
   sapply(rb1, function(x) rnorm(1, 0, switch(x + 1, sigma1, sigma2))) -> delta
   sapply(rb2, function(x) rnorm(1, 0, switch(x + 1, sigma3, sigma4))) -> eps
-  X <- apply(sapply(1:m, function(i) ksi^(i-1)), 2, function(r) r + delta)
+  X <- cbind(rep(1,n), apply(sapply(2:m, function(i) ksi^(i-1)), 2, function(r) r + delta))
   list(X = matrix(X, nrow = n, ncol = m), y = eta + eps)
 }
 
@@ -88,7 +88,7 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
 
   theta <- function(gamma) {
   	b <- calc_b(gamma)
-  	alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(x^i))))
+  	alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(X[,i+1]))))
     c(alpha, b)
   }
 
