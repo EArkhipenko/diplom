@@ -72,9 +72,9 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
     }
   }
   norm <- function(x) sqrt(sum(x^2))
-  basis <- function(n, i, val) {
+  basis <- function(n, i) {
   	a <- numeric(n)
-  	a[i] <- val
+  	a[i] <- 1
   	a
   }
 
@@ -89,8 +89,8 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   	g <- c((1-sum(g.p)), g.p)
     b <- calc_b(g, b.init)
     b.init <- b
-    for (i in 1:p) if (g.p < 0 || g.p > 1) return(1000000.0)
-    -sum(sapply(1:(p+1), function(i) SS(calc_b(basis(p+1, i, 1), b.init), basis(p+1, i, 1)) / SS(b, basis(p+1, i, 1))))
+    for (i in 1:(p+1)) if (g[i] < 0 || g[i] > 1) return(1000000.0)
+    -sum(sapply(1:(p+1), function(i) SS(calc_b(basis(p+1, i), b.init), basis(p+1, i)) / SS(b, basis(p+1, i))))
   }
 
   theta <- function(gamma) {
