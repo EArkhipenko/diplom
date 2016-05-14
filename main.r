@@ -8,8 +8,8 @@ generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
   c(runif(n, -1, 1)) -> ksi
   eta <- apply(sapply(1:m, function(i) ksi^(i-1)), 1, function(r) sum(r * tet))
 
-  rbinom(n, 1, 0.05) -> rb1
-  rbinom(n, 1, 0.05) -> rb2
+  rbinom(n, 1, 0.10) -> rb1
+  rbinom(n, 1, 0.00) -> rb2
 
   sapply(rb1, function(x) rnorm(1, 0, switch(x + 1, sigma1, sigma2))) -> delta
   sapply(rb2, function(x) rnorm(1, 0, switch(x + 1, sigma3, sigma4))) -> eps
@@ -17,14 +17,14 @@ generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
   list(X = matrix(X, nrow = n, ncol = m), y = eta + eps)
 }
 
-mnk <- function (X, y, te) {
+mnk <- function (X, y) {
   c(solve(t(X) %*% (X)) %*% t(X) %*% matrix(y)) 
 }
 
 # Au?eneyai aaooa
-rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
+rcr <- function(X, y, tet.init, g0=0.001, h=0.001, eps=1.e-8, g=NULL) {
   b0 <- tet.init[2:length(tet.init)]
-  p <- length(te) - 1
+  p <- length(tet.init) - 1
 
   r <- sqrt(apply(sapply(1:p, function(i) (X[,i+1] - mean(X[,i+1]))^2), 1, sum) + (y - mean(y))^2)
   fSxx <- function (i, j) sum((X[,i+1]-mean(X[,i+1])) * (X[,j+1]-mean(X[,j+1])) / r^2)
@@ -89,7 +89,7 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
   	g <- c((1-sum(g.p)), g.p)
     b <- calc_b(g, b.init)
     b.init <- b
-    for (i in 1:(p+1)) if (g[i] < 0 || g[i] > 1) return(1000000.0)
+    #for (i in 1:(p+1)) if (g[i] < 0 || g[i] > 1) return(1000000.0)
     -sum(sapply(1:(p+1), function(i) SS(calc_b(basis(p+1, i), b.init), basis(p+1, i)) / SS(b, basis(p+1, i))))
   }
 
@@ -109,13 +109,15 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
  #  	}
 	# }
  #  persp3d(z)
+  if (!is.null(g)) return(theta(g))
+  
   res <- optim(par=g.init, F)
   #res <- optimize(F, interval=c(0,1))
   g <- c((1-sum(res$par)), res$par)
   #g <- c((1-res$minimum), res$minimum)
   print(c(g, sum(g)))
-  #print(c(-F(res$minimum), theta(g)))
-  #print(-F(res$par))
+  #print(c(-F(res$minimum),F(numeric(p)), theta(g)))
+  print(c(-F(res$par), -F(numeric(p))))
   theta(g)
   
 
@@ -206,6 +208,13 @@ rcr <- function(X, y, te, tet.init, g0=0.001, h=0.001, eps=1.e-8, k=0) {
 # }
 }
 
+rcr_g0 <- function(X, y, tet.init) {
+  m <- length(tet.init)
+  g <- numeric(m)
+  g[1] <- 1
+  rcr(X, y, tet.init, g=g)
+}
+
 rcr2 <- function(x, y, b0=0.001, h=0.001, eps=1.e-8, k=0) {
   r <- sqrt((x-mean(x))^2 + (y - mean(y))^2)
   Sxx <- sum((x-mean(x))^2 / r^2)
@@ -284,8 +293,8 @@ rcr3 <- function(x, y, gamma_init=0.1, b0=0.001, h=0.001, eps=1.e-8) {
   c(mean(y) - b * mean(x), b)
 }
 
-als <- function(X, y, te, tet.init, sigma_init=0.01, eps=1.e-8) {
-  m <- length(te)
+als <- function(X, y, tet.init, sigma_init=0.01, eps=1.e-8) {
+  m <- length(tet.init)
   n <- length(y)
   matrix(1, nrow=n, ncol=2*m) -> t
   matrix(0, nrow=m, ncol=m) -> P
@@ -344,31 +353,59 @@ als <- function(X, y, te, tet.init, sigma_init=0.01, eps=1.e-8) {
   # theta(0.0001)
 }
 
+err <- function (data, tet) {
+  m <- length(tet)
+  n <- length(data$y)
+  y.est <- apply(sapply(1:m, function(i) data$X[,i]), 1, function(r) sum(r * tet))
+  c(sum((data$y - y.est)^2) / n, sum(abs(data$y - y.est)) / n)
+}
+
 report <- function (N, te) {
   psi <- function (tet) sum((tet - te)^2 /  te^2)
-  err <- function (data, tet) {
-  	m <- length(tet)
-  	n <- length(data$y)
-  	y.est <- apply(sapply(1:m, function(i) data$X[,i]), 1, function(r) sum(r * tet))
-  	c(sum((data$y - y.est)^2) / n, sum(abs(data$y - y.est)) / n)
-  }
   m <- length(te)
-  out <- matrix(0, nrow=N, ncol=(m+2)*3)
+  out <- matrix(0, nrow=N, ncol=(m+2)*4)
   for (i in 1:N) {
     data <- generate(500, te)
-    tet.mnk <- mnk(data$X, data$y, te=te)
-    tet.als <- als(data$X, data$y, te=te, tet.init=tet.mnk)
-    tet.rcr <- rcr(data$X, data$y, te=te, tet.init=tet.mnk)
-    out[i,] <- c(tet.mnk, err(data, tet.mnk), tet.als, err(data, tet.als), tet.rcr, err(data, tet.rcr))
+    tet.mnk <- mnk(data$X, data$y)
+    tet.als <- als(data$X, data$y, tet.init=tet.mnk)
+    tet.rcr <- rcr(data$X, data$y, tet.init=tet.mnk)
+    tet.rcr_g0 <- rcr_g0(data$X, data$y, tet.init=tet.mnk)
+    out[i,] <- c(tet.mnk, err(data, tet.mnk), tet.als, err(data, tet.als), tet.rcr, err(data, tet.rcr), tet.rcr_g0, err(data, tet.rcr_g0))
   }
   x <- data.frame(out)
   write.xlsx(x, file = "report.xlsx")
 }
 
-te <- c(1.3, 2.1, 0.4)
-report(1, te)
+
+research <- function(f, m=3) {
+  dx <- read.table(sprintf("data/x_%s.txt", f))
+  dy <- read.table(sprintf("data/y_%s.txt", f))
+  data <- list(X = sapply(1:m, function(i) dx$V1^(i-1)), y = dy$V1)
+  ff <- function(tet) {
+    function (x) sum(sapply(1:m, function(i) x^(i-1)) * tet)
+  }
+  tet.mnk <- mnk(data$X, data$y)
+  print(sprintf("tet.mnk = (%s), err = %f", paste(tet.mnk, collapse=", "), err(data, tet.mnk)[2]))
+  plot(Vectorize(ff(tet.mnk)), 0, 1)
+  tet.als <- als(data$X, data$y, tet.init=tet.mnk)
+  print(sprintf("tet.als = (%s), err = %f", paste(tet.als, collapse=", "), err(data, tet.als)[2]))
+  plot(Vectorize(ff(tet.als)), 0, 1)
+  tet.rcr <- rcr(data$X, data$y, tet.init=tet.mnk)
+  print(sprintf("tet.rcr = (%s), err = %f", paste(tet.rcr, collapse=", "), err(data, tet.rcr)[2]))
+  plot(Vectorize(ff(tet.rcr)), 0, 1)
+  tet.rcr_g0 <- rcr_g0(data$X, data$y, tet.init=tet.mnk)
+  print(sprintf("tet.rcr_g0 = (%s), err = %f", paste(tet.rcr_g0, collapse=", "), err(data, tet.rcr_g0)[2]))
+  plot(Vectorize(ff(tet.rcr_g0)), 0, 1)
+}
+
+
+#te <- c(1.3, 2.1, 0.4)
+#report(1, te)
+
+research("3_year_215")
+
 #data <- generate(500, te)
-# #plot(data$x, data$y)
+# plot(data$X[,2], data$y)
 #b0 <- mnk(data$x, data$y, te=te)
 #tet <- rcr(data$x, data$y, te=te, tet.init=b0)
 
