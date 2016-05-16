@@ -3,18 +3,18 @@ require(xlsx)
 library(rgl)
 
 # Aaia?e?oai aoiaiua aaiiua
-generate <- function(n, tet, sigma1=0.01, sigma2=0.5, sigma3=0.01, sigma4=0.5) {
+generate <- function(n, tet, sigma1=0.05, sigma2=0.5, sigma3=0.05, sigma4=0.8) {
   m <- length(tet)
   c(runif(n, -1, 1)) -> ksi
   eta <- apply(sapply(1:m, function(i) ksi^(i-1)), 1, function(r) sum(r * tet))
 
-  rbinom(n, 1, 0.10) -> rb1
-  rbinom(n, 1, 0.00) -> rb2
+  rbinom(n, 1, 0.05) -> rb1
+  rbinom(n, 1, 0.05) -> rb2
 
   sapply(rb1, function(x) rnorm(1, 0, switch(x + 1, sigma1, sigma2))) -> delta
   sapply(rb2, function(x) rnorm(1, 0, switch(x + 1, sigma3, sigma4))) -> eps
   X <- cbind(rep(1,n), apply(sapply(2:m, function(i) ksi^(i-1)), 2, function(r) r + delta))
-  list(X = matrix(X, nrow = n, ncol = m), y = eta + eps)
+  list(X = matrix(X, nrow = n, ncol = m), y = eta + eps, outliersX = rb1, outliersY = rb2)
 }
 
 mnk <- function (X, y) {
@@ -208,6 +208,95 @@ rcr <- function(X, y, tet.init, g0=0.001, h=0.001, eps=1.e-8, g=NULL) {
 # }
 }
 
+
+rcr_err <- function(X, y, tet.init, g0=0.001, h=0.001, eps=1.e-8, g=NULL) {
+  b0 <- tet.init[2:length(tet.init)]
+  p <- length(tet.init) - 1
+  n <- length(y)
+  
+  r <- sqrt(apply(sapply(1:p, function(i) (X[,i+1] - mean(X[,i+1]))^2), 1, sum) + (y - mean(y))^2)
+  fSxx <- function (i, j) sum((X[,i+1]-mean(X[,i+1])) * (X[,j+1]-mean(X[,j+1])) / r^2)
+  fSxy <- function (j) sum((X[,j+1]-mean(X[,j+1])) * (y - mean(y)) / r^2)
+  Syy <- sum((y-mean(y))^2 / r^2)
+  
+  Sxx <- matrix(0, nrow = p, ncol = p)
+  Sxy <- numeric(p)
+  for (i in 1:p) {
+    for (j in 1:p) {
+      Sxx[i,j] <- fSxx(i, j)
+    }
+    Sxy[i] <- fSxy(i)
+  }
+  
+  
+  SS <- function(b, gamma) {
+    #gamma0 <- 1 - sum(gamma)
+    gamma0 <- gamma[1]
+    gamma.other <- gamma[2:length(gamma)]
+    Sxx.sum <- 0
+    Sxy.sum <- 0
+    for (i in 1:p) {
+      for (j in 1:p) {
+        Sxx.sum <- Sxx.sum + b[i] * b[j] * Sxx[i, j]
+      }
+      Sxy.sum <- Sxy.sum + b[i] * Sxy[i]
+    }
+    (gamma0 + sum(gamma.other / b^2)) * (Syy + Sxx.sum - 2 * Sxy.sum)
+  }
+
+  fg <- function(b) function(g) SS(b, g)
+  fb <- function(g) function(b) SS(b, g)
+  df <- function(f) {
+    function (v) {
+      l <- length(v)
+      grad <- numeric(l)
+      for (i in 1:l) {
+        v.plus.h <- v
+        v.plus.h[i] <- v.plus.h[i] + h 
+        grad[i] <- (f(v.plus.h) - f(v)) / h
+      }
+      grad
+    }
+  }
+  norm <- function(x) sqrt(sum(x^2))
+  basis <- function(n, i) {
+    a <- numeric(n)
+    a[i] <- 1
+    a
+  }
+  
+  g.init <- rep(g0, p)
+  b.init <- b0
+  calc_b <- function (g, b.init=b0) {
+    res <- nleqslv(b.init, df(fb(g)), method = "Newton")
+    res$x
+  }
+  
+  
+  theta <- function(gamma) {
+    b <- calc_b(gamma)
+    alpha <- mean(y) - sum(b * sapply(1:p, function(i) (mean(X[,i+1]))))
+    c(alpha, b)
+  }
+  
+  F <- function(g.p) {
+    g <- c((1-sum(g.p)), g.p)
+    b <- calc_b(g, b.init)
+    y.est <- X %*% matrix(theta(g))
+    for (i in 1:(p+1)) if (g[i] < 0 || g[i] > 1) return(1000000.0)
+    sum(abs(y - y.est)) / n
+  }
+
+  res <- optim(par=g.init, F)
+  #res <- optimize(F, interval=c(0,1))
+  g <- c((1-sum(res$par)), res$par)
+  #g <- c((1-res$minimum), res$minimum)
+  print(c(g, sum(g)))
+  #print(c(-F(res$minimum),F(numeric(p)), theta(g)))
+  print(c(F(res$par), F(numeric(p))))
+  theta(g)
+}
+
 rcr_g0 <- function(X, y, tet.init) {
   m <- length(tet.init)
   g <- numeric(m)
@@ -321,7 +410,7 @@ als <- function(X, y, tet.init, sigma_init=0.01, eps=1.e-8) {
 
   norm <- function(x) sqrt(sum(x^2))
 
-  theta(0.01)
+  theta(0.01^2)
 
   #g <- var(x) / var(y)
   # g <- 1
@@ -376,33 +465,60 @@ report <- function (N, te) {
   write.xlsx(x, file = "report.xlsx")
 }
 
+model <- function(tet) {
+  m <- length(tet)
+  Vectorize(function (x) sum(sapply(1:m, function(i) x^(i-1)) * tet))
+}
 
 research <- function(f, m=3) {
   dx <- read.table(sprintf("data/x_%s.txt", f))
   dy <- read.table(sprintf("data/y_%s.txt", f))
   data <- list(X = sapply(1:m, function(i) dx$V1^(i-1)), y = dy$V1)
-  ff <- function(tet) {
-    function (x) sum(sapply(1:m, function(i) x^(i-1)) * tet)
-  }
+
   tet.mnk <- mnk(data$X, data$y)
   print(sprintf("tet.mnk = (%s), err = %f", paste(tet.mnk, collapse=", "), err(data, tet.mnk)[2]))
-  plot(Vectorize(ff(tet.mnk)), 0, 1)
+  plot(model(tet.mnk), 0, 1)
+  
   tet.als <- als(data$X, data$y, tet.init=tet.mnk)
   print(sprintf("tet.als = (%s), err = %f", paste(tet.als, collapse=", "), err(data, tet.als)[2]))
-  plot(Vectorize(ff(tet.als)), 0, 1)
+  plot(model(tet.als), 0, 1)
+  
   tet.rcr <- rcr(data$X, data$y, tet.init=tet.mnk)
   print(sprintf("tet.rcr = (%s), err = %f", paste(tet.rcr, collapse=", "), err(data, tet.rcr)[2]))
-  plot(Vectorize(ff(tet.rcr)), 0, 1)
+  plot(model(tet.rcr), 0, 1)
+  
+  tet.rcr_err <- rcr_err(data$X, data$y, tet.init=tet.mnk)
+  print(sprintf("tet.rcr_err = (%s), err = %f", paste(tet.rcr_err, collapse=", "), err(data, tet.rcr_err)[2]))
+  plot(model(tet.rcr_err), 0, 1)
+  
   tet.rcr_g0 <- rcr_g0(data$X, data$y, tet.init=tet.mnk)
   print(sprintf("tet.rcr_g0 = (%s), err = %f", paste(tet.rcr_g0, collapse=", "), err(data, tet.rcr_g0)[2]))
-  plot(Vectorize(ff(tet.rcr_g0)), 0, 1)
+  plot(model(tet.rcr_g0), 0, 1)
 }
 
 
-#te <- c(1.3, 2.1, 0.4)
+outliersPlot <- function(te) {
+  data <- generate(50, te)
+  X.clean = data$X[data$outliersX == 0 & data$outliersY == 0,]
+  y.clean = data$y[data$outliersX == 0 & data$outliersY == 0]
+  X.outliers = data$X[data$outliersX == 1 | data$outliersY == 1,]
+  y.outliers = data$y[data$outliersX == 1 | data$outliersY == 1]
+  
+  tet.mnk <- mnk(data$X, data$y)
+  tet.als <- als(data$X, data$y, tet.init=tet.mnk)
+  tet.als.clean <- als(X.clean, y.clean, tet.init=tet.mnk)
+  
+  plot(X.clean[,2], y.clean, col="black")
+  plot(model(tet.als), -1, 1, col="red", lwd=2, add=TRUE)
+  plot(model(tet.als.clean), -1, 1, col="black", lwd=2, add=TRUE)
+  points(X.outliers[,2], y.outliers, col="red")
+}
+
+te <- c(1.3, 2.1, 0.4)
 #report(1, te)
 
-research("3_year_215")
+#research("2_year_421")
+outliersPlot(te)
 
 #data <- generate(500, te)
 # plot(data$X[,2], data$y)
